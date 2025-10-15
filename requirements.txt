@@ -6,6 +6,7 @@ PyMuPDF
 python-docx
 langchain-community
 PyPDF2
-pptx
+python-pptx
+
 
 
