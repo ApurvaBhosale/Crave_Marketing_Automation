@@ -1,0 +1,8 @@
+streamlit
+hdbcli
+openai
+langchain_openai
+PyMuPDF
+python-docx
+langchain-community
+
