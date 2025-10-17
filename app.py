@@ -143,7 +143,7 @@ with col4:
  #   client_name = st.text_input("Client Name (optional)")
 
 # Row 6: Query input
-query = st.text_input("Enter your topic:")
+query = st.text_input("**Enter your topic:**")
 # Common field for both Blog and Video Script
 additional_info = st.text_area(
     "**Add more information about the topic (optional):**",
@@ -152,7 +152,7 @@ additional_info = st.text_area(
 )
 
 uploaded_files = st.file_uploader(
-    "Upload reference document(s) (TXT, PDF, DOCX, PPTX)",
+    "**Upload reference document(s) (TXT, PDF, DOCX, PPTX)**",
     type=["txt", "pdf", "docx", "pptx"],
     accept_multiple_files=True
 )
@@ -347,7 +347,14 @@ Use the following reference content:
 if generate_button and query:
     with st.spinner(f"Generating {content_type}..."):
         db, client = init_services()
+        
+        # Combine query + additional info
+        full_query = query
+        if additional_info.strip():
+            full_query += f"\n\nAdditional Information:\n{additional_info.strip()}"
+
         final_content = retrieve_content(full_query, uploaded_files, db)
+        
 
         if content_type == "Blog":
             prompt = generate_blog_prompt(tone, target_audience, industry, full_query, word_limit, final_content)
@@ -366,4 +373,3 @@ if generate_button and query:
 
     st.subheader(f"Generated {content_type} ✨")
     st.markdown(output)
-
