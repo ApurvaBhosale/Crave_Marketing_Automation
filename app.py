@@ -136,7 +136,7 @@ col3, col4 = st.columns(2)
 with col3:
     word_limit = st.number_input("**Word Limit**", min_value=100, max_value=2000, value=1000)
 with col4:
-    industry = st.text_input("Industry (optional)")
+    industry = st.text_input("**Industry** (optional)")
 
 # Row 5: Client name only for Video Script
 #if content_type == "Video Script":
@@ -144,7 +144,12 @@ with col4:
 
 # Row 6: Query input
 query = st.text_input("Enter your topic:")
-
+# Common field for both Blog and Video Script
+additional_info = st.text_area(
+    "**Add more information about the topic (optional):**",
+    placeholder="Describe what you want to create. Be specific about your goals,etc...",
+    height=120
+)
 
 uploaded_files = st.file_uploader(
     "Upload reference document(s) (TXT, PDF, DOCX, PPTX)",
@@ -223,6 +228,7 @@ def retrieve_content(query, uploaded_files, db):
     hana_text = "\n".join([doc.page_content for doc in docs]) if docs else ""
     if hana_text.strip():
         return hana_text  # Use HANA content if it exists
+    return ""
 
     
 
@@ -341,10 +347,10 @@ Use the following reference content:
 if generate_button and query:
     with st.spinner(f"Generating {content_type}..."):
         db, client = init_services()
-        final_content = retrieve_content(query, uploaded_files, db)
+        final_content = retrieve_content(full_query, uploaded_files, db)
 
         if content_type == "Blog":
-            prompt = generate_blog_prompt(tone, target_audience, industry, query, word_limit, final_content)
+            prompt = generate_blog_prompt(tone, target_audience, industry, full_query, word_limit, final_content)
         else:
             prompt = generate_video_prompt(tone, target_audience, industry, final_content)
 
@@ -360,3 +366,4 @@ if generate_button and query:
 
     st.subheader(f"Generated {content_type} ✨")
     st.markdown(output)
+
