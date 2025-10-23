@@ -323,6 +323,8 @@ You are an expert video scriptwriter.
 
 Write a {tone.lower()} video script for {target_audience} audience.
 Focus on the {industry or "Not specified"} industry.
+**Important:** Only provide the narration/voiceover content. **Do not include visuals, scene directions, or storyboard elements.**
+
 
 Structure:
 1. Problem Introduction
@@ -373,4 +375,5 @@ if generate_button and query:
 
     st.subheader(f"Generated {content_type} ✨")
     st.markdown(output)
+
 
