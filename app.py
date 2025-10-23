@@ -3,22 +3,22 @@
 # ======================================================
 
 import os
-import fitz  # PyMuPDF
-import docx
-import requests
+import fitz  # PyMuPDF #type: ignore
+import docx #type: ignore
+import requests #type: ignore
 import warnings
-import streamlit as st
-from hdbcli import dbapi
-from langchain_community.vectorstores.hanavector import HanaDB
-from langchain_openai import AzureOpenAIEmbeddings
-from langchain.chains import ConversationalRetrievalChain
+import streamlit as st #type: ignore
+from hdbcli import dbapi #type: ignore
+from langchain_community.vectorstores.hanavector import HanaDB #type: ignore
+from langchain_openai import AzureOpenAIEmbeddings #type: ignore
+from langchain.chains import ConversationalRetrievalChain #type: ignore
 #from langchain_community.document_loaders import TextLoade
-from langchain.docstore.document import Document
-from openai import AzureOpenAI
+from langchain.docstore.document import Document #type: ignore
+from openai import AzureOpenAI #type: ignore
 # for reading different file formats
-from PyPDF2 import PdfReader
-from docx import Document as DocxDocument
-from pptx import Presentation
+from PyPDF2 import PdfReader #type: ignore
+from docx import Document as DocxDocument #type: ignore
+from pptx import Presentation #type: ignore
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
@@ -334,7 +334,7 @@ Structure:
 7. Closing Scene
 
 Each scene should include:
-
+- Visual: On-screen visuals
 - Narration: Voiceover
 
 Use the following reference content:
@@ -373,4 +373,3 @@ if generate_button and query:
 
     st.subheader(f"Generated {content_type} ✨")
     st.markdown(output)
-
