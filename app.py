@@ -334,7 +334,7 @@ Structure:
 7. Closing Scene
 
 Each scene should include:
-- Visual: On-screen visuals
+
 - Narration: Voiceover
 
 Use the following reference content:
@@ -373,3 +373,4 @@ if generate_button and query:
 
     st.subheader(f"Generated {content_type} ✨")
     st.markdown(output)
+
