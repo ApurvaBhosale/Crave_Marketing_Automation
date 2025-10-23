@@ -335,7 +335,8 @@ Structure:
 
 Each scene should include:
 
-- Narration:
+- Visual: On-screen visuals
+- Narration: Voiceover
 
 Use the following reference content:
 {final_content}
@@ -373,6 +374,7 @@ if generate_button and query:
 
     st.subheader(f"Generated {content_type} ✨")
     st.markdown(output)
+
 
 
 
