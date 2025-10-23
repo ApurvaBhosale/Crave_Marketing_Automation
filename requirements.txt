@@ -1,12 +1,14 @@
 streamlit
 hdbcli
 openai
+langchain
 langchain_openai
 PyMuPDF
 python-docx
 langchain-community
 PyPDF2
 python-pptx
+
 
 
 
