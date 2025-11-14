@@ -1,42 +1,44 @@
+# app.py
 # ======================================================
-# Unified AI Content Generator (Blog + Video Script)
+# Unified AI Content Generator (Interactive Streamlit Layout)
 # ======================================================
 
 import os
-import fitz  # PyMuPDF #type: ignore
-import docx #type: ignore
-import requests #type: ignore
+import re
+import html
 import warnings
-import streamlit as st #type: ignore
-from hdbcli import dbapi #type: ignore
-from langchain_community.vectorstores.hanavector import HanaDB #type: ignore
-from langchain_openai import AzureOpenAIEmbeddings #type: ignore
-from langchain.chains import ConversationalRetrievalChain #type: ignore
-#from langchain_community.document_loaders import TextLoade
-from langchain.docstore.document import Document #type: ignore
-from openai import AzureOpenAI #type: ignore
-# for reading different file formats
-from PyPDF2 import PdfReader #type: ignore
-from docx import Document as DocxDocument #type: ignore
-from pptx import Presentation #type: ignore
+import requests #type: ignore
+import streamlit as st  # type: ignore
+
+# Document reading
+from PyPDF2 import PdfReader  # type: ignore
+from docx import Document as DocxDocument  # type: ignore
+from pptx import Presentation  # type: ignore
+
+# HANA + LangChain + Azure clients
+from hdbcli import dbapi  # type: ignore
+from langchain_community.vectorstores.hanavector import HanaDB  # type: ignore
+from langchain_openai import AzureOpenAIEmbeddings  # type: ignore
+from openai import AzureOpenAI  # type: ignore
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # ======================================================
-# Helper: Perplexity Search
+# Perplexity config (if used)
 # ======================================================
-# Load Perplexity credentials from secrets.toml
-PERPLEXITY_API_KEY = st.secrets["perplexity"]["api_key"]
-PERPLEXITY_API_URL = st.secrets["perplexity"]["api_url"]
+PERPLEXITY_API_KEY = st.secrets.get("perplexity", {}).get("api_key", "")
+PERPLEXITY_API_URL = st.secrets.get("perplexity", {}).get("api_url", "https://api.perplexity.ai/search")
+
 
 def perplexity_search(query, max_results=5):
     """Fetch results from Perplexity.ai"""
+    if not PERPLEXITY_API_KEY:
+        return ""
     payload = {"query": query}
     headers = {
-        "Authorization": f"Bearer{PERPLEXITY_API_KEY}",
-        "Content-Type": "application/json"
+        "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+        "Content-Type": "application/json",
     }
-
     try:
         response = requests.post(PERPLEXITY_API_URL, json=payload, headers=headers, timeout=15)
         response.raise_for_status()
@@ -52,124 +54,265 @@ def perplexity_search(query, max_results=5):
     except Exception as e:
         return f"Perplexity API Error: {e}"
 
+
 # ======================================================
-# Helper: Read Documents
+# File / URL text extraction
 # ======================================================
 def extract_text_from_file(file):
-    """Extract text from PDF, DOCX, PPTX, or TXT"""
+    """Extract text from TXT / PDF / DOCX / PPTX uploads"""
     text = ""
     name = file.name.lower()
 
-    if name.endswith(".txt"):
-        text = file.read().decode("utf-8")
+    try:
+        if name.endswith(".txt"):
+            text = file.read().decode("utf-8", errors="ignore")
 
-    elif name.endswith(".pdf"):
-        pdf = PdfReader(file)
-        for page in pdf.pages:
-            text += page.extract_text() or ""
+        elif name.endswith(".pdf"):
+            pdf = PdfReader(file)
+            for page in pdf.pages:
+                text += page.extract_text() or ""
 
-    elif name.endswith(".docx"):
-        doc = DocxDocument(file)
-        text = "\n".join([p.text for p in doc.paragraphs])
+        elif name.endswith(".docx"):
+            doc = DocxDocument(file)
+            text = "\n".join([p.text for p in doc.paragraphs])
 
-    elif name.endswith(".pptx"):
-        ppt = Presentation(file)
-        for slide in ppt.slides:
-            for shape in slide.shapes:
-                if hasattr(shape, "text"):
-                    text += shape.text + "\n"
+        elif name.endswith(".pptx"):
+            ppt = Presentation(file)
+            for slide in ppt.slides:
+                for shape in slide.shapes:
+                    if hasattr(shape, "text"):
+                        text += shape.text + "\n"
+    except Exception:
+        # best-effort extraction; avoid breaking generation flow
+        pass
 
     return text.strip()
 
+
 def extract_text_from_url(url):
-    """Fetch and extract readable text from a given URL using Perplexity"""
+    """Fetch and extract readable text from a given URL using Perplexity (fallback)"""
     if not url or not url.strip():
         return ""
-
     try:
-        # You can reuse your Perplexity API for this
-        payload = {"query": f"Extract main article content from: {url}"}
-        headers = {
-            "Authorization": st.secrets["perplexity"]["api_key"],
-            "Content-Type": "application/json"
-        }
-        response = requests.post(
-            "https://api.perplexity.ai/search",
-            json=payload,
-            headers=headers,
-            timeout=20
-        )
-        response.raise_for_status()
-        data = response.json()
-        if "answer" in data:
-            return data["answer"]
-        elif "data" in data and isinstance(data["data"], list):
-            return "\n".join([d.get("text", "") for d in data["data"]])
+        if PERPLEXITY_API_KEY:
+            payload = {"query": f"Extract main article content from: {url}"}
+            headers = {
+                "Authorization": f"Bearer {PERPLEXITY_API_KEY}",
+                "Content-Type": "application/json",
+            }
+            response = requests.post(PERPLEXITY_API_URL, json=payload, headers=headers, timeout=20)
+            response.raise_for_status()
+            data = response.json()
+            if "answer" in data:
+                return data["answer"]
+            elif "data" in data and isinstance(data["data"], list):
+                return "\n".join([d.get("text", "") for d in data["data"]])
+        # fallback: simple HTTP GET (less reliable for clean article text)
+        r = requests.get(url, timeout=10)
+        if r.ok:
+            return r.text
     except Exception as e:
         return f"Error extracting URL content: {e}"
-
     return ""
+
 
 # ======================================================
 # Streamlit UI Setup
 # ======================================================
 st.set_page_config(page_title="AI Content Hub", layout="wide")
-st.title("AI Content Hub")
-# Subheading
-st.markdown("##### AI-powered content creation for all your marketing needs")
-# Add some vertical space before the next header
+st.title("🧠 AI Content Hub")
+st.markdown("AI-powered content creation for all your marketing needs")
 st.markdown("<br><br>", unsafe_allow_html=True)
-#st.header("AI Content Generator")
-# Row 1: Content Type
-content_type = st.radio("**Select Content Type**", ["Blog", "Video Script"], horizontal=True)
-# Row 2: Tone and Target Audience side by side
-col1, col2 = st.columns(2)
-with col1:
-    tone = st.selectbox("**Select Tone**", ["Professional", "Friendly", "Authoritative", "Playful", "Inspirational"])
-with col2:
-    target_audience = st.selectbox(
-        "**Target Audience**",
-        ["Senior Management", "Middle Management", "Junior/Entry Level Staff"]
-    )
-# Row 3: Word Limit and Industry side by side
-col3, col4 = st.columns(2)
-with col3:
-    word_limit = st.number_input("**Word Limit**", min_value=100, max_value=2000, value=1000)
-with col4:
-    industry = st.text_input("**Industry** (optional)")
-
-# Row 5: Client name only for Video Script
-#if content_type == "Video Script":
- #   client_name = st.text_input("Client Name (optional)")
-
-# Row 6: Query input
-query = st.text_input("**Enter your topic:**")
-# Common field for both Blog and Video Script
-additional_info = st.text_area(
-    "**Add more information about the topic (optional):**",
-    placeholder="Describe what you want to create. Be specific about your goals,etc...",
-    height=120
-)
-
-uploaded_files = st.file_uploader(
-    "**Upload reference document(s) (TXT, PDF, DOCX, PPTX)**",
-    type=["txt", "pdf", "docx", "pptx"],
-    accept_multiple_files=True
-)
-
-
-# Show uploaded files
-if uploaded_files:
-    st.write("**Uploaded files:**")
-    for f in uploaded_files:
-        st.write("📄", f.name)
-        
-##if content_type == "Blog":
-  #  word_limit = st.number_input("Word Limit", min_value=100, max_value=2000, value=1000)
-generate_button = st.button(f"Generate {content_type}")
 
 # ======================================================
-# Database + Azure Setup
+# Session State
+# ======================================================
+if "output" not in st.session_state:
+    st.session_state.output = ""
+if "last_prompt" not in st.session_state:
+    st.session_state.last_prompt = ""
+if "seo_results" not in st.session_state:
+    st.session_state.seo_results = {}
+
+# ======================================================
+# Sidebar - Global Settings
+# ======================================================
+
+st.sidebar.markdown("## ⚙️ Content Configuration")
+
+# Content settings
+st.sidebar.markdown("### 🧠 Content Settings")
+content_type = st.sidebar.selectbox(
+    "📄 Select Content Type",
+    ["Blog", "Video Script"],
+    #help="Choose the type of content to generate."
+)
+
+tone = st.sidebar.selectbox(
+    "🎨 Tone",
+    [
+        "Professional", "Friendly", "Authoritative", "Playful", "Inspirational",
+        "Conversational", "Casual", "Semi-casual", "Business professional",
+        "Approachable", "Informative", "Assertive", "Engaging",
+        "Visionary (for Thought Leadership)", "Confident", "Data-driven",
+        "Plainspoken / Direct", "Witty", "Storytelling"
+    ],
+    #help="Choose the desired writing style or tone."
+)
+
+target_audience = st.sidebar.selectbox(
+    "🎯 Target Audience",
+    ["Senior Management", "Middle Management", "Junior / Entry Level Staff"],
+    #help="Select who the content is intended for."
+)
+
+industry = st.sidebar.text_input(
+    "🏢 Industry (optional)",
+    placeholder="e.g., Manufacturing, Retail, Technology",
+)
+
+# Word or time limit
+if content_type == "Blog":
+    word_limit = st.sidebar.slider(
+        "📝 Word Limit", 300, 2000, 1000, step=100,
+        #help="Recommended: 800–1200 words for best readability."
+    )
+    time_limit = None
+else:
+    time_limit = st.sidebar.slider(
+        "⏱️ Video Duration (minutes)", 0.5, 10.0, 1.5, step=0.5,
+        #help="Approximate duration of the video script."
+    )
+    word_limit = None
+
+# CTA selection
+cta_options = [
+    "Talk to our experts",
+    "Learn more about our solutions",
+    "Book a free consultation",
+    "Book Assessment",
+    "Contact us today",
+    "Download the full guide",
+    "Request a demo",
+]
+cta_choice = st.sidebar.selectbox("📢 Call-to-Action (CTA)", cta_options)
+
+# ======================================================
+# Top Bar - References & Uploads
+# ======================================================
+
+
+
+# Split into two columns inside the top bar
+col1, col2 = st.columns([1.2, 1.8])
+
+with col1:
+    st.markdown("#### 📎 Upload Documents")
+    uploaded_files = st.file_uploader(
+        "Upload Reference Files (TXT, PDF, DOCX, PPTX)",
+        type=["txt", "pdf", "docx", "pptx"],
+        accept_multiple_files=True,
+        label_visibility="collapsed",
+        help="Upload background or reference material. (Max 200MB per file)"
+    )
+    if uploaded_files:
+        for f in uploaded_files:
+            st.markdown(f"- 📄 *{f.name}*")
+
+with col2:
+    st.markdown("#### 🔗 Reference URLs")
+    reference_urls = st.text_area(
+        "Add Reference URLs (comma-separated)",
+        placeholder="https://example.com/article1, https://example.com/article2",
+        height=70,
+        label_visibility="collapsed"
+    )
+    url_list = [url.strip() for url in reference_urls.split(",") if url.strip()]
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ======================================================
+# Main Layout: Left = Inputs, Right = Output
+# ======================================================
+left, right = st.columns([1, 2])
+
+with left:
+    st.subheader("💬 Prompt / Inputs")
+    query = st.text_input("**Enter your topic or prompt:**")
+    #additional_info = st.text_area("**Add more information (optional):**", height=120)
+
+
+    #st.markdown("---")
+    st.markdown(
+    "<hr style='margin:0; border:0.5px solid #e0e0e0;'>",
+    unsafe_allow_html=True
+    )
+    if content_type == "Blog":
+        st.subheader("🔎 SEO Settings")
+        primary_keyword = st.text_input("Primary Keyword")
+        lsi_keywords_input = st.text_input("LSI / Variations (comma-separated)")
+        lsi_keywords = [k.strip() for k in lsi_keywords_input.split(",") if k.strip()]
+    else:
+        primary_keyword = ""
+        lsi_keywords = []
+
+    #st.markdown("---")
+    # Compact divider with less vertical space
+    st.markdown(
+    "<hr style='margin:0; border:0.5px solid #e0e0e0;'>",
+    unsafe_allow_html=True
+    )
+
+    generate_button = st.button(f"Generate {content_type}")
+    st.markdown("**Refine / Edit generated output**")
+    refine_instruction = st.text_area("Enter refinement instruction (e.g., make tone more formal, shorten intro):", height=80)
+    apply_refine = st.button("Apply Changes")
+
+    #st.markdown("---")
+    st.markdown(
+    "<hr style='margin:0; border:0.5px solid #e0e0e0;'>",
+    unsafe_allow_html=True
+    )
+    # Option to clear output
+    if st.button("Clear Output"):
+        st.session_state.output = ""
+        st.session_state.last_prompt = ""
+        st.session_state.seo_results = {}
+        st.success("Output cleared.")
+
+
+with right:
+    st.markdown("### 📝 Output")
+
+    # Create a bordered container using custom HTML + CSS
+    st.markdown(
+        """
+        <style>
+        .output-box {
+            border: 2px solid #E0E0E0;
+            border-radius: 12px;
+            padding: 20px;
+            background-color: #F9FAFB;
+            height: 100vh; /* Full viewport height */
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            overflow-y: auto; /* scrollable if content grows */
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    if st.session_state.output:
+        st.session_state.output.replace("```markdown", "").replace("```", "")
+        # print(st.session_state.output)
+        st.markdown(f"<div class='output-box'>{st.session_state.output}</div>", unsafe_allow_html=True)
+    else:
+        st.markdown("<div class='output-box'><em>Generated output will appear here after you click Generate.</em></div>", unsafe_allow_html=True)
+
+
+
+# ======================================================
+# Services initialization (HANA + Azure)
 # ======================================================
 def init_services():
     connection = dbapi.connect(
@@ -198,184 +341,359 @@ def init_services():
     db = HanaDB(
         embedding=embeddings,
         connection=connection,
-        table_name="MARKETING_APP_CONTENT_GENERATION"
+        table_name="MARKETING_APP_CONTENT_GENERATION",
     )
     return db, client
 
-# ======================================================
-# Unified RAG Logic
-# ======================================================
-def extract_text_from_url(url):
-    if url.strip():
-        return perplexity_search(url.strip())
-    return ""
 
-def retrieve_content(query, uploaded_files, db):
-    """Retrieve content from HANA / Perplexity / Uploaded docs/URL"""
-    
-    # 1️⃣ Check uploaded files first
+# ======================================================
+# Retrieval / RAG logic (fixed hana_text initialization)
+# ======================================================
+def retrieve_content(query, uploaded_files, url_list, db):
+    """Retrieve content from uploaded files, URLs, HANA, or Perplexity fallback"""
+    # 1) Uploaded files
     uploaded_text = ""
     if uploaded_files:
         for f in uploaded_files:
             uploaded_text += extract_text_from_file(f) + "\n"
     if uploaded_text.strip():
-        return uploaded_text 
-    
+        return uploaded_text.strip()
 
-    
-    # Check HANA for company-specific content
-    docs = db.similarity_search(query, k=20)
-    hana_text = "\n".join([doc.page_content for doc in docs]) if docs else ""
+    # 2) URLs
+    url_text = ""
+    if url_list:
+        for url in url_list:
+            url_text += extract_text_from_url(url) + "\n"
+    if url_text.strip():
+        return url_text.strip()
+
+    # 3) HANA similarity search
+    hana_text = ""
+    try:
+        docs = db.similarity_search(query, k=20) if db is not None else []
+        # docs may be list of Document-like objects
+        if docs:
+            hana_text = "\n".join([getattr(doc, "page_content", str(doc)) for doc in docs])
+    except Exception:
+        # ensure hana_text remains defined (avoid UnboundLocalError)
+        hana_text = hana_text or ""
     if hana_text.strip():
-        return hana_text  # Use HANA content if it exists
+        return hana_text.strip()
+
+    # 4) Fallback: Perplexity search of the query
+    try:
+        p_text = perplexity_search(query)
+        if p_text and not p_text.lower().startswith("perplexity api error"):
+            return p_text
+    except Exception:
+        pass
+
     return ""
 
-    
 
-
+# ======================================================
+# Prompt generators (your original, slightly condensed)
+# ======================================================
 def generate_prompt_guidelines(tone, target_audience):
-    """Return tone and audience-specific writing instructions"""
-    # Tone-specific style guide
     tone_guidelines = {
         "Professional": "Use clear, concise, and confident language. Focus on credibility, precision, and business relevance.",
         "Friendly": "Use warm, conversational, and easy-to-understand language. Maintain professionalism but sound approachable.",
         "Authoritative": "Use confident, expert-driven language. Provide strong arguments and data-backed insights.",
         "Playful": "Use witty, light-hearted, and creative phrasing. Keep the tone fun yet informative, with clever transitions.",
-        "Inspirational": "Use motivational and uplifting language. Focus on positive change, growth, and vision-driven storytelling."
+        "Inspirational": "Use motivational and uplifting language. Focus on positive change, growth, and vision-driven storytelling.",
+        "Conversational": "Write as if speaking naturally to the reader. Use a relaxed and engaging tone with simple, flowing sentences.",
+        "Casual": "Keep the language light, informal, and easy to follow. Avoid jargon; use contractions and relatable examples.",
+        "Semi-casual": "Balance professionalism with friendliness. Use polite, natural phrasing that feels human but credible.",
+        "Business professional": "Maintain a formal, respectful tone suitable for executive audiences. Emphasize clarity, accuracy, and authority.",
+        "Approachable": "Use inclusive and welcoming language. Avoid overly technical terms; sound supportive and open to dialogue.",
+        "Informative": "Focus on clarity and explanation. Use structured, factual sentences that educate the reader efficiently.",
+        "Assertive": "Use confident, decisive language. Clearly express opinions or recommendations without sounding aggressive.",
+        "Authoritative": "Adopt an expert voice with data-backed reasoning. Establish trust through precision and confidence.",
+        "Engaging": "Use dynamic, audience-focused language. Vary rhythm, include questions, and keep readers emotionally connected.",
+        "First person usage + Visionary (for Thought Leadership Articles)": "Use 'I' or 'we' statements to express personal experience and vision. Inspire forward-thinking perspectives and leadership insights.",
+        "Confident": "Use strong, assured language with active voice. Present ideas as well-founded and impactful.",
+        "Data-driven": "Use factual, analytical language supported by evidence and statistics. Focus on insights, accuracy, and quantifiable outcomes.",
+        "Plainspoken or direct": "Be concise, honest, and transparent. Avoid buzzwords and fluff; prioritize clarity and directness.",
+        "Witty (a bit of humour for special cases)": "Add subtle humor or clever turns of phrase. Keep it tasteful, intelligent, and contextually relevant.",
+        "Storytelling": "Use narrative-driven language with emotional pull. Build flow with characters, challenges, and resolutions to keep readers immersed."
     }
-    tone_instruction = tone_guidelines.get(tone, "Use a balanced and clear writing tone suitable for professional readers.")
-
-    # Audience-specific guidance
     audience_guidelines = {
         "Senior Management": (
-            "Focus on strategic insights, ROI, and business impact. "
-            "Use concise, high-level language. Avoid unnecessary technical details."
+            "Focus on strategic insights, ROI, and business impact. Use concise, high-level language. Avoid unnecessary technical details."
         ),
         "Middle Management": (
-            "Provide actionable guidance, practical steps, and process-oriented insights. "
-            "Balance strategic context with implementation advice."
+            "Provide actionable guidance, practical steps, and process-oriented insights. Balance strategic context with implementation advice."
         ),
         "Junior/Entry Level Staff": (
-            "Explain clearly, use simple examples, and avoid jargon. "
-            "Focus on learning, awareness, and foundational concepts."
-        )
+            "Explain clearly, use simple examples, and avoid jargon. Focus on learning, awareness, and foundational concepts."
+        ),
     }
+    tone_instruction = tone_guidelines.get(tone, "")
     audience_instruction = audience_guidelines.get(target_audience, "")
-
     return tone_instruction, audience_instruction
-# ======================================================
-# Prompt & Generation Logic
-# ======================================================
-def generate_blog_prompt(tone, target_audience, industry, query, word_limit, final_content):
+
+
+def generate_blog_prompt(tone, target_audience, industry, query, word_limit, final_content,
+                         primary_keyword, lsi_keywords, cta_text):
     tone_instruction, audience_instruction = generate_prompt_guidelines(tone, target_audience)
+
     return f"""
-You are a skilled blog writer.
+You are an experienced B2B blog writer specializing in SAP, AI, and enterprise technology domains.
+Your goal is to create a marketing-grade, SEO-optimized, structured, and natural blog aligned with
+enterprise communication standards. Follow these exact rules:
 
-Write a {tone.lower()} blog for {target_audience}.
-
-Tone: {tone}
-Industry: {industry or "Not specified"}
-Word Limit: {word_limit} words
-Topic: {query}
-If industry is specified, adapt examples, context, and recommendations to that industry.  
-If industry is not specified, write for a general business/technology audience.  
-
+=====================================================
+🎯 TONE & STYLE
+=====================================================
+- The language must always sound **natural, human, and conversational** — not robotic or AI-generated.
+- Be authoritative, clear, and practical — like McKinsey insights simplified by 20%.
+- Every line must add business value and flow naturally.
+- Avoid over-formal phrasing, buzzwords, or filler lines (“In today’s world”, “cutting-edge”, etc.).
+- Every line must add business value while flowing smoothly.
+- Write like a smart consultant guiding a professional audience.
+- Tone: {tone_instruction}
+- Audience: {audience_instruction}
 
 **Strict Blog Structure and Formatting Guidelines:**
-1.  **Title:**
-    * Short, focused, and benefit-driven.
-    * Must include important keywords relevant to the blog's topic.
-2.  **Introduction (2 short paragraphs):**
-    * Start with a compelling business pain point or a thought-provoking question.
-    * Clearly explain the core problem addressed by the topic, using keywords naturally.
-    * The second paragraph should seamlessly set the stage for what the reader will learn, without using phrases like "In this blog" or "This blog will cover." Instead, guide the reader into the content naturally.
-    * Each paragraph should be 3-5 lines max.
-3.  **Body:**
-    * Use clear, descriptive subheadings for each distinct section.
-    * After each subheading, provide a brief introductory paragraph (3-5 lines) that sets the context for that section.
-    * Ensure a logical flow and strong, seamless connections between all sections and subheadings.
-    * When presenting steps or points, ensure they are logically ordered and directly relevant to the surrounding content.
-    * Explain technical concepts simply, but include sufficient depth where it adds significant value.
-    * Integrate industry best practices, practical tips, or relevant SAP standards.
-    * **General Body Formatting:**
-        * Each paragraph must be short (3-5 lines).
-        * Each sentence must be 20-25 words maximum.
-        * Use bullet points or numbered lists where they enhance readability and clarity.
-4.  **Conclusion**
-    * **Heading:** Create a concise, appropriate, and engaging heading for this final section. Avoid using "Wrap-up," "Summary," or "Call to Action" directly in the heading itself. Think of a heading that summarizes the benefit or next step.
-    * Provide a brief, concise summary of the key takeaways presented in the blog.
- 
-**Prohibited Content & Phrases:**
-* Do NOT use generic introductory phrases such as "In today's fast-paced," "In this blog," "This blog will cover," "We will explore," or similar.
-* Do NOT generate generic, fabricated, or made-up blog content. All content must stem from real insights and the provided context.
-* Do NOT include any testing instructions or conversational filler in the final blog output.
 
+1️ **Title**
+   - Must be the first line of the blog.
+   - The title must appear in h1 style to it of markdown.
+   - Keep it short, focused, and benefit-driven.
+   - Keep it under 12 words and include the primary keyword naturally.
+   - Avoid clickbait or overpromises.
+   - Recommended formats:
+       • How [X] Helps [Y] Achieve [Z]
+       • [Number] Ways to [Achieve Outcome]
+       • Why [X] Isn’t Working—And How to Fix It
+       • [Phrase] in the Age of [Trend]
 
+2️ **Introduction**
+   - Begin with a real scenario or insight (max 4 lines).
+   - Build context in 1–2 short paragraphs.
+   - Smoothly bridge to the topic—no “In this blog we’ll discuss”.
 
-Use the following reference content:
-{final_content}
+3️⃣ **Body Sections (3–5 H2s)**
+   - Use descriptive or question-style subheadings (##).
+    Each section must include **at least 3 rich paragraphs** that:
+       • Explain the business context or challenge clearly.
+       • Add examples, relatable scenarios, or short client-style stories.
+       • Include supporting insights, stats, or outcomes.
+       • End with a meaningful business takeaway.
+   - Use connecting phrases (“This means…”, “For example…”, “In practice…”) to sound more natural.
+   - Maintain a balance between data and narrative — avoid sounding like a report.
+   - For shorter word limits (under 800 words), focus on **depth over quantity**: fewer sections, more substance per section.
+   - Include supporting data if relevant (“According to a 2025 SAPinsider study…”).
+   - Use lists only when they enhance clarity.
+
+4️⃣ **Conclusion (Action-Oriented)**
+   - Title example: “Accelerate Your Journey with [Solution]” or “Unlock the Future of [Topic]”.
+   - Summarize key insights in 3–4 lines.
+   - End with a strong CTA: “{cta_text}”
+
+=====================================================
+📊 SEO REQUIREMENTS
+=====================================================
+- Primary Keyword: "{primary_keyword}"
+  • Use in Title, Intro (first 100 words), at least one H2, and 2–3 times in the body.
+- LSI Keywords: {', '.join(lsi_keywords) or 'none'}
+  • Include naturally where relevant, never stuffed.
+- Optimize for readability and human tone — not keyword density.
+- Use Markdown headings (##, ###) for structure.
+
+=====================================================
+🧱 CONTENT CONTEXT
+=====================================================
+Industry: {industry or "Enterprise / B2B"}
+Word Limit: ~{word_limit} words
+Topic: "{query}"
+
+REFERENCE CONTENT:
+{final_content or '[No reference content provided]'}
+
+=====================================================
+💡 FINAL INSTRUCTION
+=====================================================
+Write the blog in one coherent piece — no step-by-step notes, no bullet outlines, no commentary.
+Output only the **final polished blog**, formatted for publishing.
+Ensure:
+- Do not add ```markdown at start and ``` at the end of response.
+- Leave one blank line after the title before the introduction begins.
+- The rest of the structure strictly follows the format above.
+- Ensure the blog reads naturally and conversationally — it should sound like expert storytelling, not a technical report.
+- When the total word limit is under 800, prioritize deeper insights per section instead of squeezing in more headings.
+- Headings should be in bold 
 """
 
-def generate_video_prompt(tone, target_audience, industry, final_content):
+def generate_video_prompt(tone, target_audience, industry, final_content,cta_text,query, time_limit):
     tone_instruction, audience_instruction = generate_prompt_guidelines(tone, target_audience)
+    # Approx. 15 seconds per scene → 4 scenes per minute
+    scenes = max(4, int(time_limit * 4))
+    scene_duration = int((time_limit * 60) / scenes)
     return f"""
-You are an expert video scriptwriter.
+    
+You are a professional **B2B video scriptwriter** who creates powerful marketing narratives.
+Write a **timestamp-based video script** for the topic: "{query}" in the {industry or "enterprise"} industry.
 
-Write a {tone.lower()} video script for {target_audience} audience.
-Focus on the {industry or "Not specified"} industry.
+=====================================================
+🎬 STRUCTURE
+=====================================================
+Each scene must include:
+- **Timestamp** (e.g. 0:00–0:{scene_duration:02d})
+- **scene name**
+- **Visuals:** On-screen visuals or camera direction
+- **Narration:** Voiceover content
 
-Structure:
-1. Problem Introduction
-2. Product/Brand Introduction
-3. Key Features Highlights
-4. Benefit Explanantion
-5. Real Life Example or Case Study
-6. Call-to-Action
-7. Closing Scene
+start each section in new line
 
-Each scene should include:
+=====================================================
+🕒 TOTAL DURATION & SCENES
+=====================================================
+- Total video duration: ~{time_limit} minute(s)
+- Divide into ~{scenes} scenes (~{scene_duration} seconds each)
+- End with a personalized Call-to-Action
 
-- Visual: On-screen visuals
-- Narration: Voiceover
+=====================================================
+📖 STORYLINE FLOW
+=====================================================
+1️⃣ **Problem Introduction** – hook the viewer immediately (Scene 1)
+2️⃣ **Product or Brand Introduction** – what you offer and why it matters
+3️⃣ **Key Feature Highlights** – focus on impact, not just specs
+4️⃣ **Benefits** – how it solves real challenges
+5️⃣ **Real-Life Example or Case Study** – add credibility
+6️⃣ **Call-to-Action & Closing** – must sound human, confident, and aligned with "{cta_text}"
 
-Use the following reference content:
-{final_content}
+=====================================================
+🗣️ LANGUAGE & STYLE
+=====================================================
+- Tone: {tone_instruction}
+- Target Audience: {audience_instruction}
+- Do not add ```markdown at start and ``` at the end of response.
+- Avoid generic phrasing like "in today’s fast-paced world" or "businesses need to adapt."
+- Use **specific**, **action-oriented**, and **emotive** language.
+- Maintain storytelling rhythm: short lines that sound natural as voiceover.
+- Keep the flow: Hook → Insight → Value → CTA.
+- visual and narration heading should be in bold.
+- start visual and narration in new line
+- Generate output in markdown format
+
+=====================================================
+📚 CONTEXT & REFERENCE
+=====================================================
+Industry: {industry or "Not specified"}
+Topic: "{query}"
+Reference Content:
+{final_content or "[No reference material provided]"}
+
+=====================================================
+💡 OUTPUT FORMAT (Example)
+=====================================================
+Return only the **final timestamped script** like this:
+
+0:00–0:{scene_duration:02d} → [Scene 1: Problem introduction narration and visuals]  
+0:{scene_duration:02d}–0:{scene_duration*2:02d} → [Scene 2: Brand introduction narration and visuals]  
+...  
+{int(time_limit*60 - scene_duration):02d}–{int(time_limit*60):02d} → [Final CTA narration — "{cta_text}"]
 """
 
+
+
+
+
 # ======================================================
-# Generate Content
+# CTA mapping
 # ======================================================
+cta_mapping = {
+    "Book Assessment": "Book your free SAP Clean Core Assessment today.",
+    "Request a demo": "Request a demo to see the solution in action.",
+    "Talk to our experts": "Talk to our experts to discuss your requirements.",
+    "Learn more about our solutions": "Learn more about our solutions tailored to your needs.",
+    "Contact us today": "Contact us today to get started.",
+    "Download the full guide": "Download the full guide to explore more insights.",
+    "Book a free consultation": "Book your free consultation today.",
+}
+
+
+# ======================================================
+# Generate / Refine Handlers
+# ======================================================
+def call_openai_chat(client, prompt_system, max_tokens=3200, temperature=0.7):
+    """Call Azure OpenAI chat completion and return content or raise"""
+    messages = [{"role": "system", "content": prompt_system}]
+    response = client.chat.completions.create(messages=messages, model="Codetest", max_tokens=max_tokens, temperature=temperature)
+    return response.choices[0].message.content
+
+
 if generate_button and query:
-    with st.spinner(f"Generating {content_type}..."):
-        db, client = init_services()
-        
-        # Combine query + additional info
-        full_query = query
-        if additional_info.strip():
-            full_query += f"\n\nAdditional Information:\n{additional_info.strip()}"
+    # Validate SEO for blog
+    if content_type == "Blog" and not primary_keyword.strip():
+        st.error("For Blog generation, Primary Keyword is required.")
+    else:
+        with st.spinner(f"Generating {content_type}..."):
+            try:
+                db, client = init_services()
+            except Exception as e:
+                st.error(f"Service init error: {e}")
+                db, client = None, None
 
-        final_content = retrieve_content(full_query, uploaded_files, db)
-        
+            # Build full query (topic + additional)
+            full_query = query.strip()
+            #if additional_info and additional_info.strip():
+              #full_query += f"\n\nAdditional Information:\n{additional_info.strip()}"
 
-        if content_type == "Blog":
-            prompt = generate_blog_prompt(tone, target_audience, industry, full_query, word_limit, final_content)
-        else:
-            prompt = generate_video_prompt(tone, target_audience, industry, final_content)
+            final_content = retrieve_content(full_query, uploaded_files, url_list, db)
 
-        messages = [{"role": "system", "content": prompt}]
-        response = client.chat.completions.create(
-            messages=messages,
-            model="Codetest",
-            max_tokens=1600,
-            temperature=0.7
-        )
+            # Prepare CTA text
+            cta_text = cta_mapping.get(cta_choice, cta_choice)
 
-        output = response.choices[0].message.content
+            # Build prompt
+            if content_type == "Blog":
+                prompt = generate_blog_prompt(tone, target_audience, industry, full_query, word_limit, final_content,
+                                              primary_keyword.strip(), lsi_keywords, cta_text)
+            else:
+                prompt = generate_video_prompt(tone, target_audience, industry, final_content, cta_text, query, time_limit)
 
-    st.subheader(f"Generated {content_type} ✨")
-    st.markdown(output)
+            try:
+                output = call_openai_chat(client, prompt)
+            except Exception as e:
+                st.error(f"OpenAI API error: {e}")
+                output = ""
+
+            if output:
+                st.session_state.output = output
+                st.session_state.last_prompt = full_query
+
+                # Run SEO checks if blog
+                if content_type == "Blog":
+                    #seo_results = seo_check(output, primary_keyword.strip(), lsi_keywords)
+                    st.session_state.seo_results = {}
+
+                # Scroll or re-render to show output
+                st.rerun()
 
 
+# Apply refine
+if apply_refine and st.session_state.output and refine_instruction and refine_instruction.strip():
+    with st.spinner("Applying refinement..."):
+        try:
+            db, client = init_services()
+        except Exception as e:
+            st.error(f"Service init error: {e}")
+            db, client = None, None
 
+        refine_prompt = f"Refine the following content based on instruction: '{refine_instruction.strip()}'\n\nContent:\n{st.session_state.output}"
+        try:
+            new_output = call_openai_chat(client, refine_prompt, max_tokens=3000)
+        except Exception as e:
+            st.error(f"Refinement error: {e}")
+            new_output = ""
 
+        if new_output:
+            st.session_state.output = new_output
+            # Re-run SEO validation if blog
+            if content_type == "Blog":
+                #seo_results = seo_check(new_output, primary_keyword.strip(), lsi_keywords)
+                st.session_state.seo_results = {}
+            st.rerun()
 
+# End of app
