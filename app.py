@@ -319,6 +319,9 @@ with right:
             {html_content}
         </div>
         """
+        # Render the complete box with content in a single call
+        st.markdown(full_html, unsafe_allow_html=True)
+        
     else:
         st.markdown("<div class='output-box'><em>Generated output will appear here after you click Generate.</em></div>", unsafe_allow_html=True)
 
@@ -710,4 +713,5 @@ if apply_refine and st.session_state.output and refine_instruction and refine_in
             st.rerun()
 
 # End of app
+
 
