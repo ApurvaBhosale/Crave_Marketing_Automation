@@ -280,7 +280,7 @@ with left:
         st.session_state.seo_results = {}
         st.success("Output cleared.")
 
-
+import markdown
 with right:
     st.markdown("### 📝 Output")
 
@@ -713,5 +713,6 @@ if apply_refine and st.session_state.output and refine_instruction and refine_in
             st.rerun()
 
 # End of app
+
 
 
