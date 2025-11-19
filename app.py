@@ -303,9 +303,22 @@ with right:
     )
 
     if st.session_state.output:
-        st.session_state.output.replace("```markdown", "").replace("```", "")
-        # print(st.session_state.output)
-        st.markdown(f"<div class='output-box'>{st.session_state.output}</div>", unsafe_allow_html=True)
+        clean_output = (
+            st.session_state.output
+            .replace("```markdown", "")
+            .replace("```", "")
+            .lstrip()
+        )
+
+        # NEW CHANGE: Convert Markdown content to HTML
+        html_content = markdown.markdown(clean_output)
+        
+        # NEW CHANGE: Embed the HTML content inside the box structure
+        full_html = f"""
+        <div class='output-box'>
+            {html_content}
+        </div>
+        """
     else:
         st.markdown("<div class='output-box'><em>Generated output will appear here after you click Generate.</em></div>", unsafe_allow_html=True)
 
@@ -697,3 +710,4 @@ if apply_refine and st.session_state.output and refine_instruction and refine_in
             st.rerun()
 
 # End of app
+
