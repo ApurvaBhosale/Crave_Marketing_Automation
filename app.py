@@ -120,6 +120,51 @@ def extract_text_from_url(url):
 # Streamlit UI Setup
 # ======================================================
 st.set_page_config(page_title="AI Content Hub", layout="wide")
+st.markdown("""
+<style>
+/* Remove top padding from Streamlit container */
+.block-container {
+    padding-top: 0rem !important;
+}
+
+/* Custom title wrapper */
+.custom-title-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: -40px;   /* move title up */
+    margin-bottom: -20px;
+}
+
+/* Custom icon */
+.custom-title-icon {
+    width: 48px;
+    height: 48px;
+}
+
+/* Custom title text */
+.custom-title-text {
+    font-size: 42px;
+    font-weight: 700;
+}
+
+/* Subtitle styling */
+.custom-subtitle {
+    margin-top: -10px;
+    font-size: 16px;
+    color: #555;
+}
+</style>
+
+<div class="custom-title-container">
+    <img src="https://em-content.zobj.net/source/microsoft-teams/363/brain_1f9e0.png" class="custom-title-icon">
+    <div class="custom-title-text">AI Content Hub</div>
+</div>
+
+<div class="custom-subtitle">
+    AI-powered content creation for all your marketing needs
+</div>
+""", unsafe_allow_html=True)
 st.title("🧠 AI Content Hub")
 st.markdown("AI-powered content creation for all your marketing needs")
 st.markdown("<br><br>", unsafe_allow_html=True)
@@ -713,6 +758,7 @@ if apply_refine and st.session_state.output and refine_instruction and refine_in
             st.rerun()
 
 # End of app
+
 
 
 
