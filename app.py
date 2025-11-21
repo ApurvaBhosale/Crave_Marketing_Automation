@@ -473,11 +473,31 @@ def generate_prompt_guidelines(tone, target_audience):
     audience_instruction = audience_guidelines.get(target_audience, "")
     return tone_instruction, audience_instruction
 
-
+def enforce_word_limit(text, limit):
+    """Trim text to exact word limit. Keeps first `limit` words."""
+    if not limit or limit <= 0:
+     return text
+    words = text.split()
+    if len(words) <= limit:
+     return text
+    trimmed = " ".join(words[:limit])
+    # ensure it ends gracefully
+    if not trimmed.endswith((".", "!", "?")):
+     trimmed = trimmed.rstrip(',;:') + '.'
+    return trimmed
 def generate_blog_prompt(tone, target_audience, industry, query, word_limit, final_content,
                          primary_keyword, lsi_keywords, cta_text):
     tone_instruction, audience_instruction = generate_prompt_guidelines(tone, target_audience)
-
+    # Strict word limits instruction
+    if word_limit:
+        lower = max( max(1, word_limit - 20), 1 )
+        upper = word_limit + 20
+        word_limit_instruction = (
+        f"The final blog MUST be between {lower} and {upper} words. "
+        f"Do NOT exceed this range. Stop immediately once you reach the word limit."
+        )
+    else:
+        word_limit_instruction = ""
     return f"""
 You are an experienced B2B blog writer specializing in SAP, AI, and enterprise technology domains.
 Your goal is to create a marketing-grade, SEO-optimized, structured, and natural blog aligned with
@@ -564,6 +584,7 @@ Ensure:
 - Ensure the blog reads naturally and conversationally — it should sound like expert storytelling, not a technical report.
 - When the total word limit is under 800, prioritize deeper insights per section instead of squeezing in more headings.
 - Headings should be in bold 
+{word_limit_instruction}
 """
 
 def generate_video_prompt(tone, target_audience, industry, final_content,cta_text,query, time_limit):
@@ -633,8 +654,7 @@ Return only the **final timestamped script** like this:
 
 0:00–0:{scene_duration:02d} → [Scene 1: Problem introduction narration and visuals]  
 0:{scene_duration:02d}–0:{scene_duration*2:02d} → [Scene 2: Brand introduction narration and visuals]  
-...  
-{int(time_limit*60 - scene_duration):02d}–{int(time_limit*60):02d} → [Final CTA narration — "{cta_text}"]
+
 """
 
 
@@ -738,6 +758,7 @@ if apply_refine and st.session_state.output and refine_instruction and refine_in
             st.rerun()
 
 # End of app
+
 
 
 
