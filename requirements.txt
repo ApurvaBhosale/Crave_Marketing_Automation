@@ -1,20 +1,44 @@
-streamlit
+# Core Streamlit and LLM Dependencies (Crucial for Cloud Deployment)
+streamlit==1.44.1
+openai==1.108.2
+pydantic==2.11.9
+# LangChain components that align with Pydantic 2.x/OpenAI 1.x
+langchain==0.3.27
+langchain-community==0.3.29
+langchain-core==0.3.76
+langchain-openai==0.3.33
+langsmith==0.4.30
+tiktoken==0.11.0
+requests==2.32.5
+
+# Data & Document Processing (PDF, DOCX, XLSX)
+PyMuPDF==1.26.5
+PyPDF2==3.0.1
+python-docx==1.2.0
+python-pptx==1.0.2
+openpyxl==3.1.5
+lxml==6.0.2
+
+# Data Science and Visualization
+pandas==2.2.3
+numpy==2.2.4
+scikit-learn==1.7.2
+scipy==1.16.3
+matplotlib==3.10.1
+altair==5.5.0
+pydeck==0.9.1
+
+# Database
 hdbcli==2.26.18
-openai
-langchain
-langchain_openai
-PyMuPDF
-python-docx
-langchain-community
-PyPDF2
-python-pptx
-langchain==0.1.20
-langchain-core==0.1.52
-langchain-community==0.0.38
-langchain-openai==0.0.6
-langsmith==0.1.17
-pydantic==1.10.15
-markdown==3.10
+SQLAlchemy==2.0.43
+
+# Other Core Dependencies
+Markdown==3.10
+python-dotenv==1.1.1
+cachetools==5.3.3
+colorama==0.4.6
+tqdm==4.67.1
+
 
 
 
