@@ -112,80 +112,32 @@ def extract_text_from_url(url):
     return ""
 
 
+import streamlit as st
+import markdown
+
+# ======================================================
 # Streamlit UI Setup
+# ======================================================
 
 st.set_page_config(page_title="AI Content Hub", layout="wide")
 
-st.markdown("""
-<style>
-/* Remove top padding from Streamlit container */
-.block-container {
-    padding-top: 0rem !important;
-}
-
-/* Custom title wrapper */
-.custom-title-container {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: -40px;   /* move title up */
-    margin-bottom: -20px;
-}
-
-/* Custom icon */
-.custom-title-icon {
-    width: 48px;
-    height: 48px;
-}
-
-/* Custom title text */
-.custom-title-text {
-    font-size: 42px;
-    font-weight: 700;
-}
-
-/* Subtitle styling */
-.custom-subtitle {
-    margin-top: -10px;
-    font-size: 16px;
-    color: #555;
-}
-</style>
-
-<div class="custom-title-container">
-    <img src="https://em-content.zobj.net/source/microsoft-teams/363/brain_1f9e0.png" class="custom-title-icon">
-    <div class="custom-title-text">AI Content Hub</div>
-</div>
-
-<div class="custom-subtitle">
-    AI-powered content creation for all your marketing needs
-</div>
-""", unsafe_allow_html=True)
-
-st.title("🧠 AI Content Hub")
-st.markdown("AI-powered content creation for all your marketing needs")
-st.markdown("<br><br>", unsafe_allow_html=True)
-
-# Session State
-
-if "output" not in st.session_state:
-    st.session_state.output = ""
-if "last_prompt" not in st.session_state:
-    st.session_state.last_prompt = ""
-if "seo_results" not in st.session_state:
-    st.session_state.seo_results = {}
-
+# ======================================================
 # Sidebar - Global Settings
+# ======================================================
 
 st.sidebar.markdown("## ⚙️ Content Configuration")
 
-# Content settings
-st.sidebar.markdown("### 🧠 Content Settings")
+# Content Type Selection
 content_type = st.sidebar.selectbox(
     "📄 Select Content Type",
     ["Blog", "Video Script"],
-    #help="Choose the type of content to generate."
 )
+
+# Dynamic Title Logic
+if content_type == "Blog":
+    dynamic_title = "AI Blog Generator"
+else:
+    dynamic_title = "AI Video Script Generator"
 
 tone = st.sidebar.selectbox(
     "🎨 Tone",
@@ -196,13 +148,11 @@ tone = st.sidebar.selectbox(
         "Visionary (for Thought Leadership)", "Confident", "Data-driven",
         "Plainspoken / Direct", "Witty", "Storytelling"
     ],
-    #help="Choose the desired writing style or tone."
 )
 
 target_audience = st.sidebar.selectbox(
     "🎯 Target Audience",
     ["Senior Management", "Middle Management", "Junior / Entry Level Staff"],
-    #help="Select who the content is intended for."
 )
 
 industry = st.sidebar.text_input(
@@ -210,34 +160,86 @@ industry = st.sidebar.text_input(
     placeholder="e.g., Manufacturing, Retail, Technology",
 )
 
-# Word or time limit
+# Blog Word Limit OR Script Timing
 if content_type == "Blog":
-    word_limit = st.sidebar.slider(
-        "📝 Word Limit", 300, 2000, 1000, step=100,
-        #help="Recommended: 800–1200 words for best readability."
-    )
+    word_limit = st.sidebar.slider("📝 Word Limit", 300, 2000, 1000, step=100)
     time_limit = None
 else:
-    time_limit = st.sidebar.slider(
-        "⏱️ Video Duration (minutes)", 0.5, 10.0, 1.5, step=0.5,
-        #help="Approximate duration of the video script."
-    )
+    time_limit = st.sidebar.slider("⏱️ Video Duration (minutes)", 0.5, 10.0, 1.5, step=0.5)
     word_limit = None
 
-# CTA selection
 cta_options = [
-    "Talk to our experts",
-    "Learn more about our solutions",
-    "Book a free consultation",
-    "Book Assessment",
-    "Contact us today",
-    "Download the full guide",
-    "Request a demo",
+    "Talk to our experts", "Learn more about our solutions", "Book a free consultation",
+    "Book Assessment", "Contact us today", "Download the full guide", "Request a demo",
 ]
 cta_choice = st.sidebar.selectbox("📢 Call-to-Action (CTA)", cta_options)
 
-# Top Bar - References & Uploads
-# Split into two columns inside the top bar
+# ======================================================
+# Custom Dynamic HTML Header
+# ======================================================
+
+st.markdown(f"""
+<style>
+.block-container {{
+    padding-top: 0rem !important;
+}}
+
+.custom-title-container {{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: -40px;
+    margin-bottom: -20px;
+}}
+
+.custom-title-icon {{
+    width: 48px;
+    height: 48px;
+}}
+
+.custom-title-text {{
+    font-size: 42px;
+    font-weight: 700;
+}}
+
+.custom-subtitle {{
+    margin-top: -10px;
+    font-size: 16px;
+    color: #555;
+}}
+</style>
+
+<div class="custom-title-container">
+    <img src="https://em-content.zobj.net/source/microsoft-teams/363/brain_1f9e0.png" class="custom-title-icon">
+    <div class="custom-title-text">{dynamic_title}</div>
+</div>
+
+<div class="custom-subtitle">
+    AI-powered content creation for all your marketing needs
+</div>
+""", unsafe_allow_html=True)
+
+# Streamlit Title (Dynamic Too)
+st.title(f"🧠 {dynamic_title}")
+st.markdown("AI-powered content creation for all your marketing needs")
+st.markdown("<br><br>", unsafe_allow_html=True)
+
+
+
+# ======================================================
+# Session State
+# ======================================================
+
+if "output" not in st.session_state:
+    st.session_state.output = ""
+
+if "seo_results" not in st.session_state:
+    st.session_state.seo_results = {}
+
+# ======================================================
+# Upload Section + Reference URLs
+# ======================================================
+
 col1, col2 = st.columns([1.2, 1.8])
 
 with col1:
@@ -247,7 +249,6 @@ with col1:
         type=["txt", "pdf", "docx", "pptx"],
         accept_multiple_files=True,
         label_visibility="collapsed",
-        help="Upload background or reference material. (Max 200MB per file)"
     )
     if uploaded_files:
         for f in uploaded_files:
@@ -257,29 +258,26 @@ with col2:
     st.markdown("#### 🔗 Reference URLs")
     reference_urls = st.text_area(
         "Add Reference URLs (comma-separated)",
-        placeholder="https://example.com/article1, https://example.com/article2",
+        placeholder="https://example.com/page1, https://example.com/page2",
         height=70,
         label_visibility="collapsed"
     )
     url_list = [url.strip() for url in reference_urls.split(",") if url.strip()]
 
-st.markdown("</div>", unsafe_allow_html=True)
+#st.subheader("💬 Prompt / Inputs")
+query = st.text_input("**Enter your topic:**")
 
-# Main Layout: Left = Inputs, Right = Output
+#st.markdown("<hr>", unsafe_allow_html=True)
+# ======================================================
+# Main Layout — Left Inputs / Right Output
+# ======================================================
 
 left, right = st.columns([1, 2])
 
 with left:
-    st.subheader("💬 Prompt / Inputs")
-    query = st.text_input("**Enter your topic or prompt:**")
-    #additional_info = st.text_area("**Add more information (optional):**", height=120)
+    
 
-
-    #st.markdown("---")
-    st.markdown(
-    "<hr style='margin:0; border:0.5px solid #e0e0e0;'>",
-    unsafe_allow_html=True
-    )
+    # SEO settings for blog
     if content_type == "Blog":
         st.subheader("🔎 SEO Settings")
         primary_keyword = st.text_input("Primary Keyword")
@@ -289,56 +287,46 @@ with left:
         primary_keyword = ""
         lsi_keywords = []
 
-    #st.markdown("---")
-    # Compact divider with less vertical space
-    st.markdown(
-    "<hr style='margin:0; border:0.5px solid #e0e0e0;'>",
-    unsafe_allow_html=True
-    )
+    #st.markdown("<hr style='margin:0; border:0.5px solid #e0e0e0;'>", unsafe_allow_html=True)
 
+    # Generate Button
     generate_button = st.button(f"Generate {content_type}")
+
+    # Refinement Section
     st.markdown("**Refine / Edit generated output**")
-    refine_instruction = st.text_area("Enter refinement instruction (e.g., make tone more formal, shorten intro):", height=80)
+    refine_instruction = st.text_area(
+        "Enter refinement instruction (e.g., make tone more formal, shorten intro):",
+        height=180
+    )
     apply_refine = st.button("Apply Changes")
 
-    #st.markdown("---")
-    st.markdown(
-    "<hr style='margin:0; border:0.5px solid #e0e0e0;'>",
-    unsafe_allow_html=True
-    )
-    # Option to clear output
+    st.markdown("<hr style='margin:0; border:0.5px solid #e0e0e0;'>", unsafe_allow_html=True)
+
     if st.button("Clear Output"):
         st.session_state.output = ""
-        st.session_state.last_prompt = ""
         st.session_state.seo_results = {}
         st.success("Output cleared.")
 
-import markdown
+# ======================================================
+# Output Section
+# ======================================================
+
 with right:
     st.markdown("### 📝 Output")
 
-    # Create a bordered container using custom HTML + CSS
-    st.markdown(
-        """
+    st.markdown("""
         <style>
         .output-box {
             border: 2px solid #E0E0E0;
             border-radius: 12px;
             padding: 20px;
             background-color: #F9FAFB;
-            height: 100vh; /* Full viewport height */
+            height: 100vh;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            overflow-y: auto; /* scrollable if content grows */
-            position: relative;
-        }
-        .copy-icon:hover {
-            color: black;
-            transform: scale(1.1);
+            overflow-y: auto;
         }
         </style>
-        """,
-        unsafe_allow_html=True
-    )
+    """, unsafe_allow_html=True)
 
     if st.session_state.output:
         clean_output = (
@@ -348,23 +336,16 @@ with right:
             .lstrip()
         )
 
-        # NEW CHANGE: Convert Markdown content to HTML
         html_content = markdown.markdown(clean_output)
-        
-        # NEW CHANGE: Embed the HTML content inside the box structure
-        full_html = f"""
+
+        st.markdown(f"""
         <div class='output-box'>
             {html_content}
         </div>
-        """
-        
-        # Render the complete box with content in a single call
-        st.markdown(full_html, unsafe_allow_html=True)
-        
-        
-        
+        """, unsafe_allow_html=True)
+
     else:
-        st.markdown("<div class='output-box'><em>Generated output will appear here after you click Generate.</em></div>", unsafe_allow_html=True)
+        st.markdown("<div class='output-box'><em>Generated output will appear here.</em></div>", unsafe_allow_html=True)
 
 
 # Services initialization (HANA + Azure)
@@ -483,10 +464,34 @@ def generate_prompt_guidelines(tone, target_audience):
     audience_instruction = audience_guidelines.get(target_audience, "")
     return tone_instruction, audience_instruction
 
+def enforce_word_limit(text, limit):
+    """Trim text to exact word limit. Keeps first `limit` words."""
+    if not limit or limit <= 0:
+     return text
+    words = text.split()
+    if len(words) <= limit:
+     return text
+    trimmed = " ".join(words[:limit])
+    # ensure it ends gracefully
+    if not trimmed.endswith((".", "!", "?")):
+     trimmed = trimmed.rstrip(',;:') + '.'
+    return trimmed
+       
 
 def generate_blog_prompt(tone, target_audience, industry, query, word_limit, final_content,
                          primary_keyword, lsi_keywords, cta_text):
     tone_instruction, audience_instruction = generate_prompt_guidelines(tone, target_audience)
+    
+    # Strict word limits instruction
+    if word_limit:
+        lower = max( max(1, word_limit - 20), 1 )
+        upper = word_limit + 20
+        word_limit_instruction = (
+        f"The final blog MUST be between {lower} and {upper} words. "
+        f"Do NOT exceed this range. Stop immediately once you reach the word limit."
+        )
+    else:
+        word_limit_instruction = ""
 
     return f"""
 You are an experienced B2B blog writer specializing in SAP, AI, and enterprise technology domains.
@@ -574,6 +579,9 @@ Ensure:
 - Ensure the blog reads naturally and conversationally — it should sound like expert storytelling, not a technical report.
 - When the total word limit is under 800, prioritize deeper insights per section instead of squeezing in more headings.
 - Headings should be in bold 
+
+{word_limit_instruction}
+
 """
 
 def generate_video_prompt(tone, target_audience, industry, final_content,cta_text,query, time_limit):
@@ -643,8 +651,7 @@ Return only the **final timestamped script** like this:
 
 0:00–0:{scene_duration:02d} → [Scene 1: Problem introduction narration and visuals]  
 0:{scene_duration:02d}–0:{scene_duration*2:02d} → [Scene 2: Brand introduction narration and visuals]  
-...  
-{int(time_limit*60 - scene_duration):02d}–{int(time_limit*60):02d} → [Final CTA narration — "{cta_text}"]
+
 """
 
 # CTA mapping
