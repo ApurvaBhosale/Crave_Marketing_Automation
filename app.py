@@ -1,7 +1,5 @@
-# app.py
-# ======================================================
+
 # Unified AI Content Generator (Interactive Streamlit Layout)
-# ======================================================
 
 import os
 import re
@@ -23,9 +21,8 @@ from openai import AzureOpenAI  # type: ignore
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
-# ======================================================
 # Perplexity config (if used)
-# ======================================================
+
 PERPLEXITY_API_KEY = st.secrets.get("perplexity", {}).get("api_key", "")
 PERPLEXITY_API_URL = st.secrets.get("perplexity", {}).get("api_url", "https://api.perplexity.ai/search")
 
@@ -55,9 +52,8 @@ def perplexity_search(query, max_results=5):
         return f"Perplexity API Error: {e}"
 
 
-# ======================================================
 # File / URL text extraction
-# ======================================================
+
 def extract_text_from_file(file):
     """Extract text from TXT / PDF / DOCX / PPTX uploads"""
     text = ""
@@ -114,6 +110,7 @@ def extract_text_from_url(url):
     except Exception as e:
         return f"Error extracting URL content: {e}"
     return ""
+
 
 import streamlit as st
 import markdown
@@ -351,10 +348,8 @@ with right:
         st.markdown("<div class='output-box'><em>Generated output will appear here.</em></div>", unsafe_allow_html=True)
 
 
-
-# ======================================================
 # Services initialization (HANA + Azure)
-# ======================================================
+
 def init_services():
     connection = dbapi.connect(
         address=st.secrets["database"]["address"],
@@ -386,10 +381,8 @@ def init_services():
     )
     return db, client
 
-
-# ======================================================
 # Retrieval / RAG logic (fixed hana_text initialization)
-# ======================================================
+
 def retrieve_content(query, uploaded_files, url_list, db):
     """Retrieve content from uploaded files, URLs, HANA, or Perplexity fallback"""
     # 1) Uploaded files
@@ -431,10 +424,8 @@ def retrieve_content(query, uploaded_files, url_list, db):
 
     return ""
 
-
-# ======================================================
 # Prompt generators (your original, slightly condensed)
-# ======================================================
+
 def generate_prompt_guidelines(tone, target_audience):
     tone_guidelines = {
         "Professional": "Use clear, concise, and confident language. Focus on credibility, precision, and business relevance.",
@@ -485,9 +476,12 @@ def enforce_word_limit(text, limit):
     if not trimmed.endswith((".", "!", "?")):
      trimmed = trimmed.rstrip(',;:') + '.'
     return trimmed
+       
+
 def generate_blog_prompt(tone, target_audience, industry, query, word_limit, final_content,
                          primary_keyword, lsi_keywords, cta_text):
     tone_instruction, audience_instruction = generate_prompt_guidelines(tone, target_audience)
+    
     # Strict word limits instruction
     if word_limit:
         lower = max( max(1, word_limit - 20), 1 )
@@ -498,6 +492,7 @@ def generate_blog_prompt(tone, target_audience, industry, query, word_limit, fin
         )
     else:
         word_limit_instruction = ""
+
     return f"""
 You are an experienced B2B blog writer specializing in SAP, AI, and enterprise technology domains.
 Your goal is to create a marketing-grade, SEO-optimized, structured, and natural blog aligned with
@@ -584,7 +579,9 @@ Ensure:
 - Ensure the blog reads naturally and conversationally — it should sound like expert storytelling, not a technical report.
 - When the total word limit is under 800, prioritize deeper insights per section instead of squeezing in more headings.
 - Headings should be in bold 
+
 {word_limit_instruction}
+
 """
 
 def generate_video_prompt(tone, target_audience, industry, final_content,cta_text,query, time_limit):
@@ -657,13 +654,8 @@ Return only the **final timestamped script** like this:
 
 """
 
-
-
-
-
-# ======================================================
 # CTA mapping
-# ======================================================
+
 cta_mapping = {
     "Book Assessment": "Book your free SAP Clean Core Assessment today.",
     "Request a demo": "Request a demo to see the solution in action.",
@@ -674,10 +666,8 @@ cta_mapping = {
     "Book a free consultation": "Book your free consultation today.",
 }
 
-
-# ======================================================
 # Generate / Refine Handlers
-# ======================================================
+
 def call_openai_chat(client, prompt_system, max_tokens=3200, temperature=0.7):
     """Call Azure OpenAI chat completion and return content or raise"""
     messages = [{"role": "system", "content": prompt_system}]
@@ -699,8 +689,6 @@ if generate_button and query:
 
             # Build full query (topic + additional)
             full_query = query.strip()
-            #if additional_info and additional_info.strip():
-              #full_query += f"\n\nAdditional Information:\n{additional_info.strip()}"
 
             final_content = retrieve_content(full_query, uploaded_files, url_list, db)
 
@@ -758,9 +746,4 @@ if apply_refine and st.session_state.output and refine_instruction and refine_in
             st.rerun()
 
 # End of app
-
-
-
-
-
 
