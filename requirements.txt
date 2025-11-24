@@ -1,5 +1,5 @@
 streamlit
-hdbcli
+hdbcli==2.26.18
 openai
 langchain
 langchain_openai
@@ -15,6 +15,7 @@ langchain-openai==0.0.6
 langsmith==0.1.17
 pydantic==1.10.15
 markdown==3.10
+
 
 
 
